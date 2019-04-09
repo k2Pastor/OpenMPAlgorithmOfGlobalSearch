@@ -47,8 +47,8 @@ bool operator<(const Interval& i1, const Interval& i2) { return (i1.R1 < i2.R1) 
 double f(double x)
 {
 	//return 2 * (x - 3.0) * (x - 3.0) + exp(x * x / 2.0); // совпадение;
-	return sin(x) + sin((10 * x) / 3); // совпадение;
-	//return x * x;
+	//return sin(x) + sin((10 * x) / 3); // совпадение;
+	return x * x;
 	//return ((3.0 * x - 1.4) * sin(18.0 * x)); // совпадение;
 	//return -1.0 * (x + sin(x)) * exp(-1.0 * x * x); // совпадение;
 	//return sin(x) + sin((10 * x) / 3) + log(x) - 0.84 * x + 3; // совпадение;
@@ -95,13 +95,13 @@ TestPoint* InsertUp_List(list<TestPoint> *ltp, TestPoint *tpk)
 
 int main()
 {
+	int amountOfThr;
+	bool flag = false;
 	list<TestPoint> testPoints; // точки испытаний;
 	list<TestPoint>::iterator itLeft, itRight;
 	priority_queue<Interval> Queue;
 	double a, b; // границы интервала;
 	TestPoint* tpt;
-	Interval CharacteristicInterval[4];
-	TestPoint Points[4];
 	double accuracy; // точность алгоритма;
 	int iterations; // количество итераций;
 	int k = 0; // количество испытаний;
@@ -110,6 +110,7 @@ int main()
 	double r = 2.0; // заданный параметр метода;
 	double GlobalMin, DotOfGlobalMin;
 	double timeStart, timeEnd;
+	
 
 
 	cout << "Enter the ends of the segment [a;b] : " << endl;
@@ -118,25 +119,23 @@ int main()
 	cin >> iterations;
 	cout << "Enter value of the accuracy: " << endl;
 	cin >> accuracy;
+	cout << "Enter number of threads: " << endl;
+	cin >> amountOfThr;
+
+	Interval *CharacteristicInterval = new Interval[amountOfThr];
+	TestPoint *Points = new TestPoint[amountOfThr];
 
 	timeStart = clock();
+
 	double pr = (b - a) / 4;
-	for (int i = 0; i < 4; i++) {
+
+	for (int i = 0; i < amountOfThr; i++) {
 		testPoints.push_back(TestPoint(a + pr * i, f(a + pr * i)));
 	}
 
 	testPoints.push_back(TestPoint(b, f(b)));
 
-
-
-	//tp1.z = f(tp1.x);
-	//tp2.z = f(tp2.x);
-
-	//testPoints.push_back(tp1);
-	//testPoints.push_back(tp2);
 	k = 0;
-
-
 
 	do
 	{
@@ -182,63 +181,38 @@ int main()
 
 		}
 
-		/*while (itRight != testPoints.end())
-		{
-			Queue.push(Interval(ComputeR(*itLeft, *itRight, m), &(*itLeft), &(*itRight)));
-			++itLeft;
-			++itRight;
+		for (int i = 0; i < amountOfThr; i++) {
+			CharacteristicInterval[i] = Queue.top();
+			Queue.pop();
 		}
-
-		if (itRight == testPoints.end())
-		{
-			(itRight--);
-		}
-
-		CharacteristicInterval = Queue.top();
-		Queue.pop(); */
-
-		CharacteristicInterval[0] = Queue.top();
-		Queue.pop();
-		CharacteristicInterval[1] = Queue.top();
-		Queue.pop();
-		CharacteristicInterval[2] = Queue.top();
-		Queue.pop();
-		CharacteristicInterval[3] = Queue.top();
-		Queue.pop();
 
 		#pragma omp parallel shared(CharacteristicInterval, testPoints) 
 		{
 			int numberOfThr = omp_get_thread_num();
-			double tpk = 0.5 * (CharacteristicInterval[numberOfThr].pRight->x + CharacteristicInterval[numberOfThr].pLeft->x) - ((CharacteristicInterval[numberOfThr].pRight->z -
+			for (int i = 0; i < amountOfThr; i++) {
+				double tpk = 0.5 * (CharacteristicInterval[numberOfThr].pRight->x + CharacteristicInterval[numberOfThr].pLeft->x) - ((CharacteristicInterval[numberOfThr].pRight->z -
 				CharacteristicInterval[numberOfThr].pLeft->z) / (2.0 * m));
-			Points[numberOfThr].x = tpk;
-			Points[numberOfThr].z = f(tpk);
+				Points[numberOfThr].x = tpk;
+				Points[numberOfThr].z = f(tpk);
+			}
+			
 		} 
+			
+		flag = false;
 
-		
-
-		tpt = InsertUp_List(&testPoints, &Points[0]);
-		Queue.push(Interval(ComputeR(*CharacteristicInterval[0].pLeft, *tpt, m), CharacteristicInterval[0].pLeft, tpt));
-		Queue.push(Interval(ComputeR(*tpt, *CharacteristicInterval[0].pRight, m), tpt, CharacteristicInterval[0].pRight));
-
-		tpt = InsertUp_List(&testPoints, &Points[1]);
-		Queue.push(Interval(ComputeR(*CharacteristicInterval[1].pLeft, *tpt, m), CharacteristicInterval[1].pLeft, tpt));
-		Queue.push(Interval(ComputeR(*tpt, *CharacteristicInterval[1].pRight, m), tpt, CharacteristicInterval[1].pRight));
-
-		tpt = InsertUp_List(&testPoints, &Points[2]);
-		Queue.push(Interval(ComputeR(*CharacteristicInterval[2].pLeft, *tpt, m), CharacteristicInterval[2].pLeft, tpt));
-		Queue.push(Interval(ComputeR(*tpt, *CharacteristicInterval[2].pRight, m), tpt, CharacteristicInterval[2].pRight));
-
-		tpt = InsertUp_List(&testPoints, &Points[3]);
-		Queue.push(Interval(ComputeR(*CharacteristicInterval[3].pLeft, *tpt, m), CharacteristicInterval[3].pLeft, tpt));
-		Queue.push(Interval(ComputeR(*tpt, *CharacteristicInterval[3].pRight, m), tpt, CharacteristicInterval[3].pRight));
-
-		k += 4;
+		for (int i = 0; i < amountOfThr; i++) {
+			tpt = InsertUp_List(&testPoints, &Points[i]);
+			Queue.push(Interval(ComputeR(*CharacteristicInterval[i].pLeft, *tpt, m), CharacteristicInterval[i].pLeft, tpt));
+			Queue.push(Interval(ComputeR(*tpt, *CharacteristicInterval[i].pRight, m), tpt, CharacteristicInterval[i].pRight));
+			if (CharacteristicInterval[i].pRight->x - CharacteristicInterval[i].pLeft->x > accuracy) {
+				flag = true;
+			}
+		}
+		k += amountOfThr;
 
 
-	} while (fabs((CharacteristicInterval[0].pRight->x - CharacteristicInterval[0].pLeft->x) > accuracy) || fabs((CharacteristicInterval[1].pRight->x - CharacteristicInterval[1].pLeft->x) > accuracy) 
-		|| fabs((CharacteristicInterval[2].pRight->x - CharacteristicInterval[2].pLeft->x) > accuracy)
-		|| fabs((CharacteristicInterval[3].pRight->x - CharacteristicInterval[3].pLeft->x) > accuracy) && ((k - 2) < iterations));
+	} while ((flag) && (k < iterations));
+	
 
 	itLeft = testPoints.begin();
 	GlobalMin = itLeft->z;
