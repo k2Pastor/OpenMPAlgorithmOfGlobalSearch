@@ -96,12 +96,13 @@ TestPoint* InsertUp_List(list<TestPoint> *ltp, TestPoint *tpk)
 int main()
 {
 	int amountOfThr;
-	bool flag = false;
+	
 	list<TestPoint> testPoints; // точки испытаний;
 	list<TestPoint>::iterator itLeft, itRight;
 	priority_queue<Interval> Queue;
 	double a, b; // границы интервала;
 	TestPoint* tpt;
+	
 	double accuracy; // точность алгоритма;
 	int iterations; // количество итераций;
 	int k = 0; // количество испытаний;
@@ -110,6 +111,7 @@ int main()
 	double r = 2.0; // заданный параметр метода;
 	double GlobalMin, DotOfGlobalMin;
 	double timeStart, timeEnd;
+	bool flag = false;
 	
 
 
@@ -126,9 +128,7 @@ int main()
 	TestPoint *Points = new TestPoint[amountOfThr];
 
 	timeStart = clock();
-
-	double pr = (b - a) / 4;
-
+	double pr = (b - a) / amountOfThr;
 	for (int i = 0; i < amountOfThr; i++) {
 		testPoints.push_back(TestPoint(a + pr * i, f(a + pr * i)));
 	}
@@ -186,7 +186,7 @@ int main()
 			Queue.pop();
 		}
 
-		#pragma omp parallel shared(CharacteristicInterval, testPoints) 
+		/* #pragma omp parallel shared(CharacteristicInterval, testPoints) 
 		{
 			int numberOfThr = omp_get_thread_num();
 			for (int i = 0; i < amountOfThr; i++) {
@@ -195,10 +195,18 @@ int main()
 				Points[numberOfThr].x = tpk;
 				Points[numberOfThr].z = f(tpk);
 			}
-			
-		} 
-			
-		flag = false;
+		} */
+
+		#pragma omp parallel num_threads(amountOfThr) shared(CharacteristicInterval, testPoints) 
+		{
+			int numberOfThr = omp_get_thread_num();
+				double tpk = 0.5 * (CharacteristicInterval[numberOfThr].pRight->x + CharacteristicInterval[numberOfThr].pLeft->x) - ((CharacteristicInterval[numberOfThr].pRight->z -
+					CharacteristicInterval[numberOfThr].pLeft->z) / (2.0 * m));
+				Points[numberOfThr].x = tpk;
+				Points[numberOfThr].z = f(tpk);
+		}
+
+		flag = false; 
 
 		for (int i = 0; i < amountOfThr; i++) {
 			tpt = InsertUp_List(&testPoints, &Points[i]);
@@ -208,10 +216,11 @@ int main()
 				flag = true;
 			}
 		}
+
 		k += amountOfThr;
 
 
-	} while ((flag) && (k < iterations));
+	} while (flag && k < iterations);
 	
 
 	itLeft = testPoints.begin();
